@@ -4,6 +4,7 @@
 ![Shell](https://img.shields.io/badge/Shell-Bash-4EAA25.svg)
 ![LaTeX](https://img.shields.io/badge/LaTeX-latexdiff-008080.svg)
 ![Docker](https://img.shields.io/badge/Docker-supported-2496ED.svg)
+![Docker Image](https://github.com/buaabarty/automated-latex-paper-diff/actions/workflows/docker-image.yml/badge.svg)
 
 Generate reviewer-facing marked manuscripts from two LaTeX source trees with a
 reproducible, table-aware `latexdiff` workflow.
@@ -27,7 +28,27 @@ changes were actually marked.
 
 ## Quick Start With Docker
 
-Build the image once:
+Use the prebuilt image from GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/buaabarty/automated-latex-paper-diff:latest
+```
+
+Run it from a directory that contains two LaTeX source trees, for example
+`paper-original/` and `paper-revised/`:
+
+```bash
+docker run --rm \
+  -v "$PWD":/work \
+  ghcr.io/buaabarty/automated-latex-paper-diff:latest \
+  --old /work/paper-original \
+  --new /work/paper-revised \
+  --main main.tex \
+  --out /work/marked_diff_output \
+  --tag major_revision
+```
+
+Alternatively, build the image locally:
 
 ```bash
 git clone https://github.com/buaabarty/automated-latex-paper-diff.git
@@ -35,8 +56,7 @@ cd automated-latex-paper-diff
 docker build -t automated-latex-paper-diff:latest .
 ```
 
-Run it from a directory that contains two LaTeX source trees, for example
-`paper-original/` and `paper-revised/`:
+Then run the local image:
 
 ```bash
 docker run --rm \
@@ -146,6 +166,20 @@ Environment:
 make smoke         # shell syntax check
 make docker-build  # build local Docker image
 ```
+
+## Published Images
+
+The Docker image is published by GitHub Actions to:
+
+```text
+ghcr.io/buaabarty/automated-latex-paper-diff
+```
+
+Tags:
+
+- `latest`: latest successful build from `main`;
+- `vX.Y.Z`: release tags;
+- `sha-<commit>`: commit-specific image tags.
 
 ## Known Limits
 
