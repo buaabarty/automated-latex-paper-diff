@@ -1,0 +1,11 @@
+marked_diff_output/
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+main_diff.pdf
+main_diff.tex
