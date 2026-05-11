@@ -132,6 +132,8 @@ After `latexdiff` runs, the script overrides all generated `DIFadd`, `DIFdel`,
 `DIFaddFL`, and `DIFdelFL` macros so additions are underlined and deletions are
 struck through everywhere, including table cells and captions. This override is
 applied even if `LATEXDIFF_FLAGS` includes another `--type` value.
+Float begin/end markers are kept as no-ops so color state cannot leak into later
+unchanged sections.
 
 To avoid that failure mode, the script detects `table`, `table*`, `figure`, and
 `figure*` environments whose captions are fully added and wraps the whole float
@@ -147,6 +149,15 @@ lists:
 
 This report is useful before submission because it makes table coverage
 checkable rather than relying on visual inspection alone.
+
+## Bibliography Diffing
+
+When a source tree uses BibTeX `\bibliography{...}`, the script compiles the old
+and revised manuscripts once, runs BibTeX for each, and replaces the bibliography
+command in the temporary source copies with the generated `.bbl` content before
+running `latexdiff`. This makes added, deleted, and edited reference entries
+visible in the marked manuscript instead of silently rendering only the revised
+bibliography.
 
 ## Command Reference
 

@@ -140,6 +140,75 @@ COMMON_EXCLUDES=(
 rsync -a --delete "${COMMON_EXCLUDES[@]}" "${OLD_ABS}/" "${OLD_CLEAN}/"
 rsync -a --delete "${COMMON_EXCLUDES[@]}" "${NEW_ABS}/" "${WORK_DIR}/"
 
+prepare_bibliography_diff_source() {
+  local tree="$1"
+  local label="$2"
+  local job="__latexdiff_${label}_refs"
+
+  if ! rg -q --glob '*.tex' '\\bibliography\s*\{' "${tree}"; then
+    return 0
+  fi
+
+  echo "Preparing ${label} bibliography for reference diff..."
+  (
+    cd "${tree}"
+    rm -f "${job}.aux" "${job}.bbl" "${job}.blg" "${job}.log" "${job}.out" "${job}.pdf"
+    pdflatex -interaction=nonstopmode -halt-on-error -jobname="${job}" "${MAIN_TEX}" >"/tmp/${job}_pdflatex.log"
+    if ! rg -q '\\bibdata\{' "${job}.aux"; then
+      echo "ERROR: ${label} source contains \\bibliography but ${job}.aux has no BibTeX data." >&2
+      exit 1
+    fi
+    bibtex "${job}" >"/tmp/${job}_bibtex.log"
+  )
+
+  if [[ ! -s "${tree}/${job}.bbl" ]]; then
+    echo "ERROR: failed to generate ${label} bibliography file for reference diff: ${tree}/${job}.bbl" >&2
+    exit 1
+  fi
+
+  python3 - "${tree}" "${tree}/${job}.bbl" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+root = Path(sys.argv[1])
+bbl_path = Path(sys.argv[2])
+bbl = bbl_path.read_text()
+replacement = (
+    '\n%DIF INLINE BIBLIOGRAPHY BEGIN\n'
+    + bbl.rstrip()
+    + '\n%DIF INLINE BIBLIOGRAPHY END\n'
+)
+pattern = re.compile(r'\\bibliography\s*\{[^{}]*\}')
+replaced = 0
+
+for tex_path in root.rglob('*.tex'):
+    text = tex_path.read_text()
+
+    def repl(match: re.Match[str]) -> str:
+        global replaced
+        line_start = text.rfind('\n', 0, match.start()) + 1
+        prefix = text[line_start:match.start()]
+        percent = prefix.find('%')
+        if percent != -1 and (percent == 0 or prefix[percent - 1] != '\\'):
+            return match.group(0)
+        replaced += 1
+        return replacement
+
+    new_text = pattern.sub(repl, text)
+    if new_text != text:
+        tex_path.write_text(new_text)
+
+if replaced == 0:
+    raise SystemExit('No active \\bibliography command was replaced with the generated .bbl content.')
+PY
+
+  rm -f "${tree}/${job}.aux" "${tree}/${job}.bbl" "${tree}/${job}.blg" "${tree}/${job}.log" "${tree}/${job}.out" "${tree}/${job}.pdf"
+}
+
+prepare_bibliography_diff_source "${OLD_CLEAN}" "old"
+prepare_bibliography_diff_source "${WORK_DIR}" "new"
+
 echo "Generating latexdiff..."
 latexdiff \
   --flatten \
@@ -150,18 +219,10 @@ latexdiff \
   --disable-citation-markup \
   ${LATEXDIFF_FLAGS:-} \
   "${OLD_CLEAN}/${MAIN_TEX}" \
-  "${NEW_ABS}/${MAIN_TEX}" \
+  "${WORK_DIR}/${MAIN_TEX}" \
   > "${DIFF_TEX}"
 
 echo "Post-processing latexdiff output..."
-
-# FLOATSAFE protects tables/figures, but it leaves whole added/deleted floats
-# visually unmarked in many real papers. Keep float markup compile-safe while
-# making whole-float replacements visible.
-perl -0pi -e 's/\\providecommand\{\\DIFaddbeginFL\}\{\}/\\providecommand{\\DIFaddbeginFL}{\\color{blue}}/g;
-              s/\\providecommand\{\\DIFaddendFL\}\{\}/\\providecommand{\\DIFaddendFL}{\\color{black}}/g;
-              s/\\providecommand\{\\DIFdelbeginFL\}\{\}/\\providecommand{\\DIFdelbeginFL}{\\color{red}}/g;
-              s/\\providecommand\{\\DIFdelendFL\}\{\}/\\providecommand{\\DIFdelendFL}{\\color{black}}/g;' "${DIFF_TEX}"
 
 python3 - "${DIFF_TEX}" <<'PY'
 from pathlib import Path
@@ -175,10 +236,18 @@ override = r'''
 \RequirePackage[normalem]{ulem} %DIF PREAMBLE
 \providecommand{\DIFseadd}[1]{{\protect\color{blue}\uline{#1}}} %DIF PREAMBLE
 \providecommand{\DIFsedel}[1]{{\protect\color{red}\sout{#1}}} %DIF PREAMBLE
+\providecommand{\DIFaddbeginFL}{} %DIF PREAMBLE
+\providecommand{\DIFaddendFL}{} %DIF PREAMBLE
+\providecommand{\DIFdelbeginFL}{} %DIF PREAMBLE
+\providecommand{\DIFdelendFL}{} %DIF PREAMBLE
 \renewcommand{\DIFadd}[1]{\DIFseadd{#1}} %DIF PREAMBLE
 \renewcommand{\DIFdel}[1]{\DIFsedel{#1}} %DIF PREAMBLE
 \renewcommand{\DIFaddFL}[1]{\DIFseadd{#1}} %DIF PREAMBLE
 \renewcommand{\DIFdelFL}[1]{\DIFsedel{#1}} %DIF PREAMBLE
+\renewcommand{\DIFaddbeginFL}{} %DIF PREAMBLE
+\renewcommand{\DIFaddendFL}{} %DIF PREAMBLE
+\renewcommand{\DIFdelbeginFL}{} %DIF PREAMBLE
+\renewcommand{\DIFdelendFL}{} %DIF PREAMBLE
 %DIF END REVIEW MARKUP OVERRIDE %DIF PREAMBLE
 '''.strip()
 if override not in text:
