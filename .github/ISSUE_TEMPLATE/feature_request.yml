@@ -1,0 +1,19 @@
+name: Feature request
+description: Suggest an improvement for marked manuscript generation.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What revision workflow problem should this project handle better?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior or command-line option you would like.
+    validations:
+      required: true

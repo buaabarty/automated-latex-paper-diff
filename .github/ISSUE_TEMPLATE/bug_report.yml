@@ -1,0 +1,35 @@
+name: Bug report
+description: Report a compilation failure or incorrect diff marking.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What failed or what looked wrong in the marked manuscript?
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: Paste the exact command you ran.
+      render: bash
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or report
+      description: Paste the LaTeX error and table_diff_report.txt when available.
+      render: text
+    validations:
+      required: false
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: If possible, attach or describe a minimal old/new LaTeX pair.
+    validations:
+      required: false
