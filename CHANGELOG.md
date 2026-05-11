@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## v0.1.1 - 2026-05-11
 
 - Added GitHub Actions workflow for building and publishing Docker images to GitHub Container Registry.
 - Documented prebuilt GHCR image usage and Docker tag policy.
