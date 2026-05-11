@@ -27,6 +27,7 @@ RUN apt-get update \
     texlive-latex-base \
     texlive-latex-extra \
     texlive-latex-recommended \
+    texlive-plain-generic \
     texlive-publishers \
     texlive-science \
   && mkdir -p /tmp/empty-texmf /tmp/texmf-var-clean \
