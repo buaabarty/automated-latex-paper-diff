@@ -128,6 +128,11 @@ The script runs `latexdiff` with `--floattype=FLOATSAFE` so complex tables and
 figures are more likely to compile. A side effect of `FLOATSAFE` is that fully
 new tables can be present in the PDF without visually obvious addition markup.
 
+After `latexdiff` runs, the script overrides all generated `DIFadd`, `DIFdel`,
+`DIFaddFL`, and `DIFdelFL` macros so additions are underlined and deletions are
+struck through everywhere, including table cells and captions. This override is
+applied even if `LATEXDIFF_FLAGS` includes another `--type` value.
+
 To avoid that failure mode, the script detects `table`, `table*`, `figure`, and
 `figure*` environments whose captions are fully added and wraps the whole float
 in a scripted addition marker. It also inserts a visible deletion label when a
