@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## v0.1.4 - 2026-05-11
+
+- Removed stateful float color markers that could leak blue/red text into later unchanged sections after complex table or figure changes.
+- Inlined generated BibTeX `.bbl` files before `latexdiff` so bibliography entry additions, deletions, and edits are marked in the final manuscript.
+
 ## v0.1.3 - 2026-05-11
 
 - Forced all generated diff macros to use underlined additions and struck deletions, even when callers pass alternate `latexdiff --type` flags.
