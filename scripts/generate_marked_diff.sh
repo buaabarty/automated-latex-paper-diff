@@ -163,6 +163,32 @@ perl -0pi -e 's/\\providecommand\{\\DIFaddbeginFL\}\{\}/\\providecommand{\\DIFad
               s/\\providecommand\{\\DIFdelbeginFL\}\{\}/\\providecommand{\\DIFdelbeginFL}{\\color{red}}/g;
               s/\\providecommand\{\\DIFdelendFL\}\{\}/\\providecommand{\\DIFdelendFL}{\\color{black}}/g;' "${DIFF_TEX}"
 
+python3 - "${DIFF_TEX}" <<'PY'
+from pathlib import Path
+import sys
+
+diff_tex = Path(sys.argv[1])
+text = diff_tex.read_text()
+marker = '%DIF END PREAMBLE EXTENSION ADDED BY LATEXDIFF'
+override = r'''
+%DIF REVIEW MARKUP OVERRIDE %DIF PREAMBLE
+\RequirePackage[normalem]{ulem} %DIF PREAMBLE
+\providecommand{\DIFseadd}[1]{{\protect\color{blue}\uline{#1}}} %DIF PREAMBLE
+\providecommand{\DIFsedel}[1]{{\protect\color{red}\sout{#1}}} %DIF PREAMBLE
+\renewcommand{\DIFadd}[1]{\DIFseadd{#1}} %DIF PREAMBLE
+\renewcommand{\DIFdel}[1]{\DIFsedel{#1}} %DIF PREAMBLE
+\renewcommand{\DIFaddFL}[1]{\DIFseadd{#1}} %DIF PREAMBLE
+\renewcommand{\DIFdelFL}[1]{\DIFsedel{#1}} %DIF PREAMBLE
+%DIF END REVIEW MARKUP OVERRIDE %DIF PREAMBLE
+'''.strip()
+if override not in text:
+    if marker in text:
+        text = text.replace(marker, override + '\n' + marker, 1)
+    else:
+        text = override + '\n' + text
+diff_tex.write_text(text)
+PY
+
 # Repair citation wrappers commonly produced when latexdiff meets natbib plus
 # ulem/soul. Citation keys are metadata; the surrounding changed sentence still
 # carries the visual addition/deletion mark.
@@ -326,7 +352,11 @@ echo "Compiling marked manuscript..."
   export TEXMFHOME="${TEXMFHOME:-/tmp/empty-texmf}"
   export TEXMFVAR="${TEXMFVAR:-/tmp/texmf-var-clean}"
   pdflatex -interaction=nonstopmode -halt-on-error main_diff.tex >/tmp/marked_diff_pdflatex_1.log
-  bibtex main_diff >/tmp/marked_diff_bibtex.log
+  if rg -q '\\bibdata\{' main_diff.aux; then
+    bibtex main_diff >/tmp/marked_diff_bibtex.log
+  else
+    : > /tmp/marked_diff_bibtex.log
+  fi
   pdflatex -interaction=nonstopmode -halt-on-error main_diff.tex >/tmp/marked_diff_pdflatex_2.log
   pdflatex -interaction=nonstopmode -halt-on-error main_diff.tex >/tmp/marked_diff_pdflatex_3.log
 )

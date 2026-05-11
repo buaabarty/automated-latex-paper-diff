@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## v0.1.3 - 2026-05-11
+
+- Forced all generated diff macros to use underlined additions and struck deletions, even when callers pass alternate `latexdiff --type` flags.
+- Applied the same underline/strike markers to float/table-safe `DIFaddFL` and `DIFdelFL` content so table cell edits are visibly marked.
+
 ## v0.1.2 - 2026-05-11
 
 - Added underlined `[Added table]`/`[Added figure]` labels for whole newly added floats.
