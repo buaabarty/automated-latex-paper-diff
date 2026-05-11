@@ -4,7 +4,7 @@
 ![Shell](https://img.shields.io/badge/Shell-Bash-4EAA25.svg)
 ![LaTeX](https://img.shields.io/badge/LaTeX-latexdiff-008080.svg)
 ![Docker](https://img.shields.io/badge/Docker-supported-2496ED.svg)
-![Docker Image](https://github.com/buaabarty/automated-latex-paper-diff/actions/workflows/docker-image.yml/badge.svg)
+[![Docker Image](https://github.com/buaabarty/automated-latex-paper-diff/actions/workflows/docker-image.yml/badge.svg)](https://github.com/buaabarty/automated-latex-paper-diff/actions/workflows/docker-image.yml)
 
 Generate reviewer-facing marked manuscripts from two LaTeX source trees with a
 reproducible, table-aware `latexdiff` workflow.
@@ -21,7 +21,8 @@ changes were actually marked.
 - Compares a pre-revision LaTeX tree against a revised tree.
 - Produces a marked PDF, marked `.tex`, and a table/float coverage report.
 - Uses conservative `latexdiff` settings that work better on real papers.
-- Marks whole newly added tables, not only changed captions.
+- Marks whole newly added/deleted tables and figures with visible labels, not
+  only color changes.
 - Repairs common `natbib`/`ulem` citation wrappers produced by `latexdiff`.
 - Supports repeatable project-local LaTeX replacements for obsolete references.
 - Provides a Docker workflow so users do not need to install TeX Live locally.
@@ -127,11 +128,15 @@ The script runs `latexdiff` with `--floattype=FLOATSAFE` so complex tables and
 figures are more likely to compile. A side effect of `FLOATSAFE` is that fully
 new tables can be present in the PDF without visually obvious addition markup.
 
-To avoid that failure mode, the script detects `table` and `table*` environments
-whose captions are fully added and wraps the whole float in a scripted addition
-marker. The generated `table_diff_report.txt` lists:
+To avoid that failure mode, the script detects `table`, `table*`, `figure`, and
+`figure*` environments whose captions are fully added and wraps the whole float
+in a scripted addition marker. It also inserts a visible deletion label when a
+deleted float body is commented out by `latexdiff`. These labels use the same
+underlined/struck diff commands as the rest of the marked manuscript, so changes
+are not communicated by color alone. The generated `table_diff_report.txt`
+lists:
 
-- whole table additions explicitly marked by post-processing;
+- whole float additions/deletions explicitly marked by post-processing;
 - all `tabular`, `tabularx`, and `longtable` environments in the marked file;
 - all float-level `DIFadd`/`DIFdel` markers in the marked file.
 

@@ -157,7 +157,7 @@ echo "Post-processing latexdiff output..."
 
 # FLOATSAFE protects tables/figures, but it leaves whole added/deleted floats
 # visually unmarked in many real papers. Keep float markup compile-safe while
-# making whole-table replacements visible.
+# making whole-float replacements visible.
 perl -0pi -e 's/\\providecommand\{\\DIFaddbeginFL\}\{\}/\\providecommand{\\DIFaddbeginFL}{\\color{blue}}/g;
               s/\\providecommand\{\\DIFaddendFL\}\{\}/\\providecommand{\\DIFaddendFL}{\\color{black}}/g;
               s/\\providecommand\{\\DIFdelbeginFL\}\{\}/\\providecommand{\\DIFdelbeginFL}{\\color{red}}/g;
@@ -187,7 +187,7 @@ diff_tex.write_text(text)
 PY
 fi
 
-python3 - "${DIFF_TEX}" "${WORK_DIR}/whole_table_additions_report.txt" <<'PY'
+python3 - "${DIFF_TEX}" "${WORK_DIR}/whole_float_changes_report.txt" <<'PY'
 from pathlib import Path
 import re
 import sys
@@ -196,10 +196,54 @@ diff_tex = Path(sys.argv[1])
 report_path = Path(sys.argv[2])
 
 lines = diff_tex.read_text().splitlines(keepends=True)
-begin_re = re.compile(r'\\begin\{(table\*?)\}')
+begin_re = re.compile(r'\\begin\{(table\*?|figure\*?)\}')
+deleted_begin_re = re.compile(r'%DIFDELCMD < \\begin\{(table\*?|figure\*?)\}')
 
+def kind_for_env(env: str) -> str:
+    return 'table' if env.startswith('table') else 'figure'
+
+def added_marker(env: str) -> str:
+    return f'\\par\\noindent\\DIFaddFL{{\\textbf{{[Added {kind_for_env(env)}]}}}}\\par\\smallskip\n'
+
+def deleted_marker(env: str) -> str:
+    return f'\\par\\noindent\\DIFdelFL{{\\textbf{{[Deleted {kind_for_env(env)}]}}}}\\par\\smallskip\n'
+
+# Make deleted floats visible even when latexdiff comments out the original
+# float body. This adds a struck deletion label before the commented block.
 out = []
 marked = []
+i = 0
+while i < len(lines):
+    if '\\DIFdelbeginFL' not in lines[i]:
+        out.append(lines[i])
+        i += 1
+        continue
+
+    j = i
+    deleted_env = None
+    while j < len(lines):
+        match = deleted_begin_re.search(lines[j])
+        if match:
+            deleted_env = match.group(1)
+        if '\\DIFdelendFL' in lines[j]:
+            break
+        j += 1
+
+    if deleted_env:
+        block_lines = lines[i:j + 1]
+        already_marked = any('[Deleted ' in line for line in block_lines)
+        out.append(lines[i])
+        if not already_marked:
+            out.append(deleted_marker(deleted_env))
+            marked.append(f'{i + 1}: deleted {deleted_env}: visible deletion label inserted')
+        out.extend(lines[i + 1:j + 1])
+        i = j + 1
+    else:
+        out.append(lines[i])
+        i += 1
+
+lines = out
+out = []
 i = 0
 while i < len(lines):
     begin_match = begin_re.search(lines[i])
@@ -233,26 +277,28 @@ while i < len(lines):
     already_whole_marked = (
         '\\DIFaddbeginFL' in lines[i]
         or (len(block_lines) > 1 and block_lines[1].lstrip().startswith('\\DIFaddbeginFL'))
+        or '[Added ' in block
     )
 
     if caption_is_added and not already_whole_marked:
         block_lines = (
             block_lines[:1]
-            + ['\\DIFaddbeginFL % scripted whole-table addition marker\n']
+            + ['\\DIFaddbeginFL % scripted whole-float addition marker\n']
+            + [added_marker(env)]
             + block_lines[1:-1]
-            + ['\\DIFaddendFL % scripted whole-table addition marker\n']
+            + ['\\DIFaddendFL % scripted whole-float addition marker\n']
             + block_lines[-1:]
         )
         caption_match = re.search(r'\\caption(?:\[[^\]]*\])?\s*\{\\DIFaddFL\{(.{0,120})', block, re.S)
         caption = caption_match.group(1).replace('\n', ' ').strip() if caption_match else '(caption unavailable)'
-        marked.append(f'{i + 1}: {env}: {caption}')
+        marked.append(f'{i + 1}: added {env}: {caption}')
 
     out.extend(block_lines)
     i = j + 1
 
 diff_tex.write_text(''.join(out))
 report_path.write_text(
-    'Whole table additions explicitly marked by post-processing\n'
+    'Whole float additions/deletions explicitly marked by post-processing\n'
     + '\n'.join(marked)
     + ('\n' if marked else 'None\n')
 )
@@ -265,7 +311,7 @@ PY
   echo "Main TeX: ${MAIN_TEX}"
   echo "Tag: ${TAG}"
   echo
-  cat "${WORK_DIR}/whole_table_additions_report.txt"
+  cat "${WORK_DIR}/whole_float_changes_report.txt"
   echo
   echo "Table-like environments found in marked diff:"
   rg -n '\\begin\{(tabular|tabularx|longtable)\}' "${DIFF_TEX}" || true
