@@ -140,6 +140,56 @@ COMMON_EXCLUDES=(
 rsync -a --delete "${COMMON_EXCLUDES[@]}" "${OLD_ABS}/" "${OLD_CLEAN}/"
 rsync -a --delete "${COMMON_EXCLUDES[@]}" "${NEW_ABS}/" "${WORK_DIR}/"
 
+print_log_excerpt() {
+  local file="$1"
+  local label="$2"
+
+  if [[ -s "${file}" ]]; then
+    echo "--- ${label}: ${file} ---" >&2
+    tail -80 "${file}" >&2
+  fi
+}
+
+run_pdflatex_or_show_log() {
+  local log_file="$1"
+  local produced_log="$2"
+  shift 2
+
+  if pdflatex -interaction=nonstopmode -halt-on-error "$@" >"${log_file}"; then
+    return 0
+  fi
+
+  local code=$?
+  echo "ERROR: pdflatex $* failed with exit code ${code}." >&2
+  print_log_excerpt "${log_file}" "pdflatex stdout"
+  print_log_excerpt "${produced_log}" "pdflatex log"
+  return "${code}"
+}
+
+run_bibtex_with_optional_warnings() {
+  local job="$1"
+  local log_file="$2"
+  local bbl_file="${job}.bbl"
+  local blg_file="${job}.blg"
+
+  if bibtex "${job}" >"${log_file}"; then
+    return 0
+  fi
+
+  local code=$?
+  if [[ "${ALLOW_WARNINGS}" -eq 1 && -s "${bbl_file}" ]]; then
+    echo "WARNING: bibtex ${job} exited with ${code}, but ${bbl_file} was generated; continuing because --allow-warnings is set." >&2
+    print_log_excerpt "${log_file}" "bibtex stdout"
+    print_log_excerpt "${blg_file}" "bibtex log"
+    return 0
+  fi
+
+  echo "ERROR: bibtex ${job} failed with exit code ${code}." >&2
+  print_log_excerpt "${log_file}" "bibtex stdout"
+  print_log_excerpt "${blg_file}" "bibtex log"
+  return "${code}"
+}
+
 prepare_bibliography_diff_source() {
   local tree="$1"
   local label="$2"
@@ -153,16 +203,19 @@ prepare_bibliography_diff_source() {
   (
     cd "${tree}"
     rm -f "${job}.aux" "${job}.bbl" "${job}.blg" "${job}.log" "${job}.out" "${job}.pdf"
-    pdflatex -interaction=nonstopmode -halt-on-error -jobname="${job}" "${MAIN_TEX}" >"/tmp/${job}_pdflatex.log"
+    run_pdflatex_or_show_log "/tmp/${job}_pdflatex.log" "${job}.log" -jobname="${job}" "${MAIN_TEX}"
     if ! rg -q '\\bibdata\{' "${job}.aux"; then
       echo "ERROR: ${label} source contains \\bibliography but ${job}.aux has no BibTeX data." >&2
       exit 1
     fi
-    bibtex "${job}" >"/tmp/${job}_bibtex.log"
+    run_bibtex_with_optional_warnings "${job}" "/tmp/${job}_bibtex.log"
   )
 
   if [[ ! -s "${tree}/${job}.bbl" ]]; then
     echo "ERROR: failed to generate ${label} bibliography file for reference diff: ${tree}/${job}.bbl" >&2
+    print_log_excerpt "/tmp/${job}_pdflatex.log" "${label} bibliography pdflatex log"
+    print_log_excerpt "/tmp/${job}_bibtex.log" "${label} bibliography bibtex stdout"
+    print_log_excerpt "${tree}/${job}.blg" "${label} bibliography bibtex log"
     exit 1
   fi
 
@@ -265,6 +318,28 @@ perl -0pi -e 's/\\cite\s*\}\s*\\hspace\{0pt\}%DIFAUXCMD\s*\n\s*\}\{\\DIFadd\{([^
               s/\\(cite|citep|citet)\s*\{\s*\\DIFadd\{([^{}]+)\}\s*\}/\\$1{$2}/g;
               s/\\(cite|citep|citet)\s+\\DIFadd\{([^{}]+)\}/\\$1{$2}/g;
               s/~\\cite\{([^{}]+)\}/~\\mbox{\\cite{$1}}/g;' "${DIFF_TEX}"
+
+python3 - "${DIFF_TEX}" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+diff_tex = Path(sys.argv[1])
+lines = diff_tex.read_text().splitlines(keepends=True)
+key_line = re.compile(r'^(\s*)\{\\DIF(?:add|del)\{([A-Za-z0-9_.:/-]+)\}\}(\s*)$')
+
+out = []
+for line in lines:
+    match = key_line.match(line.rstrip('\n'))
+    recent = ''.join(out[-3:])
+    if match and '\\bibitem' in recent:
+        ending = '\n' if line.endswith('\n') else ''
+        out.append(f'{match.group(1)}{{{match.group(2)}}}{match.group(3)}{ending}')
+    else:
+        out.append(line)
+
+diff_tex.write_text(''.join(out))
+PY
 
 if [[ "${#LATEX_REPLACEMENTS[@]}" -gt 0 ]]; then
   python3 - "${DIFF_TEX}" "${LATEX_REPLACEMENTS[@]}" <<'PY'
@@ -420,14 +495,14 @@ echo "Compiling marked manuscript..."
   cd "${WORK_DIR}"
   export TEXMFHOME="${TEXMFHOME:-/tmp/empty-texmf}"
   export TEXMFVAR="${TEXMFVAR:-/tmp/texmf-var-clean}"
-  pdflatex -interaction=nonstopmode -halt-on-error main_diff.tex >/tmp/marked_diff_pdflatex_1.log
+  run_pdflatex_or_show_log /tmp/marked_diff_pdflatex_1.log main_diff.log main_diff.tex
   if rg -q '\\bibdata\{' main_diff.aux; then
-    bibtex main_diff >/tmp/marked_diff_bibtex.log
+    run_bibtex_with_optional_warnings main_diff /tmp/marked_diff_bibtex.log
   else
     : > /tmp/marked_diff_bibtex.log
   fi
-  pdflatex -interaction=nonstopmode -halt-on-error main_diff.tex >/tmp/marked_diff_pdflatex_2.log
-  pdflatex -interaction=nonstopmode -halt-on-error main_diff.tex >/tmp/marked_diff_pdflatex_3.log
+  run_pdflatex_or_show_log /tmp/marked_diff_pdflatex_2.log main_diff.log main_diff.tex
+  run_pdflatex_or_show_log /tmp/marked_diff_pdflatex_3.log main_diff.log main_diff.tex
 )
 
 if [[ "${ALLOW_WARNINGS}" -eq 0 ]] && rg -n 'Fatal error|Emergency stop|Undefined control sequence|There were undefined references|undefined citations|Reference `[^`]+'"'"' .*undefined|Citation `[^`]+` .*undefined' "${WORK_DIR}/main_diff.log" >/tmp/marked_diff_latex_errors.log; then
