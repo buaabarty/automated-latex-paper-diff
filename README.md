@@ -138,9 +138,11 @@ unchanged sections.
 To avoid that failure mode, the script detects `table`, `table*`, `figure`, and
 `figure*` environments whose captions are fully added and wraps the whole float
 in a scripted addition marker. It also inserts a visible deletion label when a
-deleted float body is commented out by `latexdiff`. These labels use the same
-underlined/struck diff commands as the rest of the marked manuscript, so changes
-are not communicated by color alone. The generated `table_diff_report.txt`
+deleted float body is commented out by `latexdiff`, including retained table or
+figure shells whose old tabular or graphics body is commented out during a
+replacement. These labels use the same underlined/struck diff commands as the
+rest of the marked manuscript, so changes are not communicated by color alone.
+The generated `table_diff_report.txt`
 lists:
 
 - whole float additions/deletions explicitly marked by post-processing;

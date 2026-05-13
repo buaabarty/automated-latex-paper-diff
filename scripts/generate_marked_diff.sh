@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+POSTPROCESS_SCRIPT="${SCRIPT_DIR}/postprocess_marked_diff.py"
+
 usage() {
   cat <<'USAGE'
 Generate a reviewer-facing marked LaTeX diff PDF.
@@ -155,11 +158,12 @@ run_pdflatex_or_show_log() {
   local produced_log="$2"
   shift 2
 
-  if pdflatex -interaction=nonstopmode -halt-on-error "$@" >"${log_file}"; then
+  local code=0
+  pdflatex -interaction=nonstopmode -halt-on-error "$@" >"${log_file}" || code=$?
+  if [[ "${code}" -eq 0 ]]; then
     return 0
   fi
 
-  local code=$?
   echo "ERROR: pdflatex $* failed with exit code ${code}." >&2
   print_log_excerpt "${log_file}" "pdflatex stdout"
   print_log_excerpt "${produced_log}" "pdflatex log"
@@ -172,11 +176,12 @@ run_bibtex_with_optional_warnings() {
   local bbl_file="${job}.bbl"
   local blg_file="${job}.blg"
 
-  if bibtex "${job}" >"${log_file}"; then
+  local code=0
+  bibtex "${job}" >"${log_file}" || code=$?
+  if [[ "${code}" -eq 0 ]]; then
     return 0
   fi
 
-  local code=$?
   if [[ "${ALLOW_WARNINGS}" -eq 1 && -s "${bbl_file}" ]]; then
     echo "WARNING: bibtex ${job} exited with ${code}, but ${bbl_file} was generated; continuing because --allow-warnings is set." >&2
     print_log_excerpt "${log_file}" "bibtex stdout"
@@ -277,6 +282,11 @@ latexdiff \
 
 echo "Post-processing latexdiff output..."
 
+if [[ ! -f "${POSTPROCESS_SCRIPT}" ]]; then
+  echo "ERROR: post-processing helper not found: ${POSTPROCESS_SCRIPT}" >&2
+  exit 1
+fi
+
 python3 - "${DIFF_TEX}" <<'PY'
 from pathlib import Path
 import sys
@@ -357,122 +367,7 @@ diff_tex.write_text(text)
 PY
 fi
 
-python3 - "${DIFF_TEX}" "${WORK_DIR}/whole_float_changes_report.txt" <<'PY'
-from pathlib import Path
-import re
-import sys
-
-diff_tex = Path(sys.argv[1])
-report_path = Path(sys.argv[2])
-
-lines = diff_tex.read_text().splitlines(keepends=True)
-begin_re = re.compile(r'\\begin\{(table\*?|figure\*?)\}')
-deleted_begin_re = re.compile(r'%DIFDELCMD < \\begin\{(table\*?|figure\*?)\}')
-
-def kind_for_env(env: str) -> str:
-    return 'table' if env.startswith('table') else 'figure'
-
-def added_marker(env: str) -> str:
-    return f'\\par\\noindent\\DIFaddFL{{\\textbf{{[Added {kind_for_env(env)}]}}}}\\par\\smallskip\n'
-
-def deleted_marker(env: str) -> str:
-    return f'\\par\\noindent\\DIFdelFL{{\\textbf{{[Deleted {kind_for_env(env)}]}}}}\\par\\smallskip\n'
-
-# Make deleted floats visible even when latexdiff comments out the original
-# float body. This adds a struck deletion label before the commented block.
-out = []
-marked = []
-i = 0
-while i < len(lines):
-    if '\\DIFdelbeginFL' not in lines[i]:
-        out.append(lines[i])
-        i += 1
-        continue
-
-    j = i
-    deleted_env = None
-    while j < len(lines):
-        match = deleted_begin_re.search(lines[j])
-        if match:
-            deleted_env = match.group(1)
-        if '\\DIFdelendFL' in lines[j]:
-            break
-        j += 1
-
-    if deleted_env:
-        block_lines = lines[i:j + 1]
-        already_marked = any('[Deleted ' in line for line in block_lines)
-        out.append(lines[i])
-        if not already_marked:
-            out.append(deleted_marker(deleted_env))
-            marked.append(f'{i + 1}: deleted {deleted_env}: visible deletion label inserted')
-        out.extend(lines[i + 1:j + 1])
-        i = j + 1
-    else:
-        out.append(lines[i])
-        i += 1
-
-lines = out
-out = []
-i = 0
-while i < len(lines):
-    begin_match = begin_re.search(lines[i])
-    if not begin_match:
-        out.append(lines[i])
-        i += 1
-        continue
-
-    env = begin_match.group(1)
-    end_re = re.compile(r'\\end\{' + re.escape(env) + r'\}')
-    depth = 0
-    j = i
-    while j < len(lines):
-        found_begin = begin_re.search(lines[j])
-        if found_begin and found_begin.group(1) == env:
-            depth += 1
-        if end_re.search(lines[j]):
-            depth -= 1
-            if depth == 0:
-                break
-        j += 1
-
-    if j >= len(lines):
-        out.append(lines[i])
-        i += 1
-        continue
-
-    block_lines = lines[i:j + 1]
-    block = ''.join(block_lines)
-    caption_is_added = re.search(r'\\caption(?:\[[^\]]*\])?\s*\{\\DIFaddFL\{', block) is not None
-    already_whole_marked = (
-        '\\DIFaddbeginFL' in lines[i]
-        or (len(block_lines) > 1 and block_lines[1].lstrip().startswith('\\DIFaddbeginFL'))
-        or '[Added ' in block
-    )
-
-    if caption_is_added and not already_whole_marked:
-        block_lines = (
-            block_lines[:1]
-            + ['\\DIFaddbeginFL % scripted whole-float addition marker\n']
-            + [added_marker(env)]
-            + block_lines[1:-1]
-            + ['\\DIFaddendFL % scripted whole-float addition marker\n']
-            + block_lines[-1:]
-        )
-        caption_match = re.search(r'\\caption(?:\[[^\]]*\])?\s*\{\\DIFaddFL\{(.{0,120})', block, re.S)
-        caption = caption_match.group(1).replace('\n', ' ').strip() if caption_match else '(caption unavailable)'
-        marked.append(f'{i + 1}: added {env}: {caption}')
-
-    out.extend(block_lines)
-    i = j + 1
-
-diff_tex.write_text(''.join(out))
-report_path.write_text(
-    'Whole float additions/deletions explicitly marked by post-processing\n'
-    + '\n'.join(marked)
-    + ('\n' if marked else 'None\n')
-)
-PY
+python3 "${POSTPROCESS_SCRIPT}" "${DIFF_TEX}" "${WORK_DIR}/whole_float_changes_report.txt"
 
 {
   echo "Marked diff table/float coverage report"

@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+- Added deletion labels for retained table or figure shells whose old body is commented out by `latexdiff`, covering full table replacements that do not remove the outer `table` environment.
+- Moved float post-processing into a testable helper with regression coverage for retained-table body deletions.
+
 ## v0.1.4 - 2026-05-11
 
 - Removed stateful float color markers that could leak blue/red text into later unchanged sections after complex table or figure changes.
