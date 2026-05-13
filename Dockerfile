@@ -34,6 +34,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY scripts/generate_marked_diff.sh /usr/local/bin/generate_marked_diff
+COPY scripts/postprocess_marked_diff.py /usr/local/bin/postprocess_marked_diff.py
 RUN chmod +x /usr/local/bin/generate_marked_diff
 
 WORKDIR /work

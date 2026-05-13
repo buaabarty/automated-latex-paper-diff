@@ -1,4 +1,6 @@
 marked_diff_output/
+__pycache__/
+*.pyc
 *.aux
 *.bbl
 *.blg
