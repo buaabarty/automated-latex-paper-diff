@@ -35,6 +35,7 @@ RUN apt-get update \
 
 COPY scripts/generate_marked_diff.sh /usr/local/bin/generate_marked_diff
 COPY scripts/postprocess_marked_diff.py /usr/local/bin/postprocess_marked_diff.py
+COPY scripts/normalize_bibitems.py /usr/local/bin/normalize_bibitems.py
 RUN chmod +x /usr/local/bin/generate_marked_diff
 
 WORKDIR /work
