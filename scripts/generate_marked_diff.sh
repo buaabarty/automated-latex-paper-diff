@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 POSTPROCESS_SCRIPT="${SCRIPT_DIR}/postprocess_marked_diff.py"
+NORMALIZE_BIBITEMS_SCRIPT="${SCRIPT_DIR}/normalize_bibitems.py"
 
 usage() {
   cat <<'USAGE'
@@ -287,6 +288,11 @@ if [[ ! -f "${POSTPROCESS_SCRIPT}" ]]; then
   exit 1
 fi
 
+if [[ ! -f "${NORMALIZE_BIBITEMS_SCRIPT}" ]]; then
+  echo "ERROR: bibliography post-processing helper not found: ${NORMALIZE_BIBITEMS_SCRIPT}" >&2
+  exit 1
+fi
+
 python3 - "${DIFF_TEX}" <<'PY'
 from pathlib import Path
 import sys
@@ -329,27 +335,7 @@ perl -0pi -e 's/\\cite\s*\}\s*\\hspace\{0pt\}%DIFAUXCMD\s*\n\s*\}\{\\DIFadd\{([^
               s/\\(cite|citep|citet)\s+\\DIFadd\{([^{}]+)\}/\\$1{$2}/g;
               s/~\\cite\{([^{}]+)\}/~\\mbox{\\cite{$1}}/g;' "${DIFF_TEX}"
 
-python3 - "${DIFF_TEX}" <<'PY'
-from pathlib import Path
-import re
-import sys
-
-diff_tex = Path(sys.argv[1])
-lines = diff_tex.read_text().splitlines(keepends=True)
-key_line = re.compile(r'^(\s*)\{\\DIF(?:add|del)\{([A-Za-z0-9_.:/-]+)\}\}(\s*)$')
-
-out = []
-for line in lines:
-    match = key_line.match(line.rstrip('\n'))
-    recent = ''.join(out[-3:])
-    if match and '\\bibitem' in recent:
-        ending = '\n' if line.endswith('\n') else ''
-        out.append(f'{match.group(1)}{{{match.group(2)}}}{match.group(3)}{ending}')
-    else:
-        out.append(line)
-
-diff_tex.write_text(''.join(out))
-PY
+python3 "${NORMALIZE_BIBITEMS_SCRIPT}" "${DIFF_TEX}"
 
 if [[ "${#LATEX_REPLACEMENTS[@]}" -gt 0 ]]; then
   python3 - "${DIFF_TEX}" "${LATEX_REPLACEMENTS[@]}" <<'PY'
