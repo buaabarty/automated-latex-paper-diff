@@ -4,6 +4,7 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+- Normalized `latexdiff` markup accidentally inserted into `booktabs` `\cmidrule` arguments so marked diffs remain compilable for dense tables.
 - Added deletion labels for retained table or figure shells whose old body is commented out by `latexdiff`, covering full table replacements that do not remove the outer `table` environment.
 - Moved float post-processing into a testable helper with regression coverage for retained-table body deletions.
 

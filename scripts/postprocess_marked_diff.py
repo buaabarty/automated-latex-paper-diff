@@ -11,6 +11,19 @@ COMMENTED_TABLE_BODY_RE = re.compile(r"%+DIFDELCMD <[^\n]*\\begin\{(?:tabular\*?
 COMMENTED_FIGURE_BODY_RE = re.compile(r"%+DIFDELCMD <[^\n]*\\includegraphics")
 ADDED_CAPTION_RE = re.compile(r"\\caption(?:\[[^\]]*\])?\s*\{\\DIFaddFL\{", re.S)
 ADDED_CAPTION_TEXT_RE = re.compile(r"\\caption(?:\[[^\]]*\])?\s*\{\\DIFaddFL\{(.{0,120})", re.S)
+DIF_MARKUP_COMMAND = r"\\DIF(?:add|del)(?:FL)?"
+BOOKTABS_RANGE = r"([0-9]+\s*-\s*[0-9]+)"
+CMIDRULE_SPLIT_OPTION_RE = re.compile(
+    rf"\\cmidrule\s*{DIF_MARKUP_COMMAND}\{{\(([^{{}}\n]+)\)\}}\s*"
+    rf"\{{\s*{DIF_MARKUP_COMMAND}\{{\s*{BOOKTABS_RANGE}\s*\}}\s*\}}"
+)
+CMIDRULE_WRAPPED_RANGE_RE = re.compile(
+    rf"(\\cmidrule(?:\[[^\]\n]*\])?(?:\([^()\n]*\))?)\s*"
+    rf"\{{\s*{DIF_MARKUP_COMMAND}\{{\s*{BOOKTABS_RANGE}\s*\}}\s*\}}"
+)
+CMIDRULE_DIRECT_RANGE_RE = re.compile(
+    rf"\\cmidrule\s*{DIF_MARKUP_COMMAND}\{{\s*{BOOKTABS_RANGE}\s*\}}"
+)
 
 
 def kind_for_env(env: str) -> str:
@@ -23,6 +36,38 @@ def added_marker(env: str) -> str:
 
 def deleted_marker(env: str) -> str:
     return f"\\par\\noindent\\DIFdelFL{{\\textbf{{[Deleted {kind_for_env(env)}]}}}}\\par\\smallskip\n"
+
+
+def normalize_cmidrule_range(value: str) -> str:
+    return re.sub(r"\s+", "", value)
+
+
+def normalize_booktabs_cmidrules(lines: list[str], marked: list[str]) -> list[str]:
+    text = "".join(lines)
+    normalized = 0
+
+    def replace_split_option(match: re.Match[str]) -> str:
+        nonlocal normalized
+        normalized += 1
+        return f"\\cmidrule({match.group(1).strip()}){{{normalize_cmidrule_range(match.group(2))}}}"
+
+    def replace_wrapped_range(match: re.Match[str]) -> str:
+        nonlocal normalized
+        normalized += 1
+        return f"{match.group(1)}{{{normalize_cmidrule_range(match.group(2))}}}"
+
+    def replace_direct_range(match: re.Match[str]) -> str:
+        nonlocal normalized
+        normalized += 1
+        return f"\\cmidrule{{{normalize_cmidrule_range(match.group(1))}}}"
+
+    text = CMIDRULE_SPLIT_OPTION_RE.sub(replace_split_option, text)
+    text = CMIDRULE_WRAPPED_RANGE_RE.sub(replace_wrapped_range, text)
+    text = CMIDRULE_DIRECT_RANGE_RE.sub(replace_direct_range, text)
+
+    if normalized:
+        marked.append(f"booktabs cmidrule: normalized {normalized} latexdiff-marked rule argument(s)")
+    return text.splitlines(keepends=True)
 
 
 def has_unescaped_comment_before(line: str, pos: int) -> bool:
@@ -173,6 +218,7 @@ def postprocess(diff_tex: Path, report_path: Path) -> None:
     lines = diff_tex.read_text().splitlines(keepends=True)
     marked: list[str] = []
 
+    lines = normalize_booktabs_cmidrules(lines, marked)
     lines = mark_commented_deleted_floats(lines, marked)
     lines = mark_active_float_blocks(lines, marked)
 
