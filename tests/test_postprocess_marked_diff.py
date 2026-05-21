@@ -92,6 +92,41 @@ New & Body \\
         self.assertIn(r"\DIFaddFL{\textbf{[Added table]}}", tex)
         self.assertIn("added table:", report)
 
+    def test_normalizes_latexdiff_markup_inside_booktabs_cmidrule(self) -> None:
+        tex, report = run_postprocess(
+            r"""
+\begin{table}[t]
+\begin{tabular}{@{}l ccc ccc@{}}
+\toprule
+Metric & \multicolumn{3}{c}{A} & \multicolumn{3}{c}{B}\\
+\cmidrule\DIFaddFL{(lr)}{\DIFaddFL{2-4}}\cmidrule\DIFaddFL{(lr)}{\DIFaddFL{5-7}}
+ & One & Two & Three & Four & Five & Six\\
+\midrule
+Value & 1 & 2 & 3 & 4 & 5 & 6\\
+\bottomrule
+\end{tabular}
+\end{table}
+"""
+        )
+
+        self.assertIn(r"\cmidrule(lr){2-4}\cmidrule(lr){5-7}", tex)
+        self.assertNotIn(r"\cmidrule\DIFaddFL", tex)
+        self.assertIn("booktabs cmidrule: normalized 2", report)
+
+    def test_normalizes_wrapped_booktabs_cmidrule_range(self) -> None:
+        tex, report = run_postprocess(
+            r"""
+\begin{tabular}{lll}
+\cmidrule(lr){\DIFaddFL{ 2 - 3 }}
+\cmidrule\DIFdelFL{4-5}
+\end{tabular}
+"""
+        )
+
+        self.assertIn(r"\cmidrule(lr){2-3}", tex)
+        self.assertIn(r"\cmidrule{4-5}", tex)
+        self.assertIn("booktabs cmidrule: normalized 2", report)
+
 
 if __name__ == "__main__":
     unittest.main()
