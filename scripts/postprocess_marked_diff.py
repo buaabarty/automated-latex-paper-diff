@@ -6,9 +6,12 @@ import re
 import sys
 
 FLOAT_BEGIN_RE = re.compile(r"\\begin\{(table\*?|figure\*?)\}")
+FLOAT_BEGIN_WITH_OPTION_RE = re.compile(r"(\\begin\{(table\*?|figure\*?)\})(?:\[[^\]\n]*\])?")
+BEGIN_DOCUMENT_RE = re.compile(r"\\begin\{document\}")
 COMMENTED_DELETED_FLOAT_BEGIN_RE = re.compile(r"%+DIFDELCMD <\s*\\begin\{(table\*?|figure\*?)\}")
 COMMENTED_TABLE_BODY_RE = re.compile(r"%+DIFDELCMD <[^\n]*\\begin\{(?:tabular\*?|tabularx|longtable)\}")
 COMMENTED_FIGURE_BODY_RE = re.compile(r"%+DIFDELCMD <[^\n]*\\includegraphics")
+USEPACKAGE_RE = re.compile(r"\\usepackage(?:\[[^\]\n]*\])?\{([^}\n]+)\}")
 ADDED_CAPTION_RE = re.compile(r"\\caption(?:\[[^\]]*\])?\s*\{\\DIFaddFL\{", re.S)
 ADDED_CAPTION_TEXT_RE = re.compile(r"\\caption(?:\[[^\]]*\])?\s*\{\\DIFaddFL\{(.{0,120})", re.S)
 DIF_MARKUP_COMMAND = r"\\DIF(?:add|del)(?:FL)?"
@@ -101,6 +104,57 @@ def active_search(pattern: re.Pattern[str], line: str) -> re.Match[str] | None:
 
 def active_float_begin(line: str) -> re.Match[str] | None:
     return active_search(FLOAT_BEGIN_RE, line)
+
+
+def active_begin_document(line: str) -> re.Match[str] | None:
+    return active_search(BEGIN_DOCUMENT_RE, line)
+
+
+def has_float_package(lines: list[str]) -> bool:
+    for line in lines:
+        match = active_search(USEPACKAGE_RE, line)
+        if not match:
+            continue
+        packages = [package.strip() for package in match.group(1).split(",")]
+        if "float" in packages:
+            return True
+    return False
+
+
+def pin_active_float_placement(lines: list[str], marked: list[str]) -> list[str]:
+    pinned = 0
+    active_float_count = 0
+    out: list[str] = []
+
+    for line in lines:
+        cursor = 0
+        rewritten: list[str] = []
+        for match in FLOAT_BEGIN_WITH_OPTION_RE.finditer(line):
+            if has_unescaped_comment_before(line, match.start()):
+                continue
+            active_float_count += 1
+            rewritten.append(line[cursor : match.start()])
+            replacement = f"{match.group(1)}[H]"
+            rewritten.append(replacement)
+            if match.group(0) != replacement:
+                pinned += 1
+            cursor = match.end()
+        if rewritten:
+            rewritten.append(line[cursor:])
+            out.append("".join(rewritten))
+        else:
+            out.append(line)
+
+    if active_float_count and not has_float_package(out):
+        for index, line in enumerate(out):
+            if active_begin_document(line):
+                out.insert(index, "\\usepackage{float} % scripted diff float placement\n")
+                break
+
+    if pinned:
+        marked.append(f"float placement: pinned {pinned} active float(s) with [H]")
+
+    return out
 
 
 def find_active_float_end(lines: list[str], start: int, env: str) -> int | None:
@@ -236,6 +290,7 @@ def postprocess(diff_tex: Path, report_path: Path) -> None:
     marked: list[str] = []
 
     lines = normalize_booktabs_cmidrules(lines, marked)
+    lines = pin_active_float_placement(lines, marked)
     lines = mark_commented_deleted_floats(lines, marked)
     lines = mark_active_float_blocks(lines, marked)
 
