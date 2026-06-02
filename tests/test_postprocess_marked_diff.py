@@ -23,7 +23,7 @@ def run_postprocess(source: str) -> tuple[str, str]:
 
 
 class PostprocessMarkedDiffTest(unittest.TestCase):
-    def test_marks_retained_table_with_commented_deleted_body(self) -> None:
+    def test_marks_retained_table_body_replacement_without_claiming_whole_table_deleted(self) -> None:
         tex, report = run_postprocess(
             r"""
 \begin{table*}[t]
@@ -43,8 +43,32 @@ New & Body \\
 """
         )
 
-        self.assertIn(r"\DIFdelFL{\textbf{[Deleted table]}}", tex)
-        self.assertIn("deleted table* body: visible deletion label inserted", report)
+        self.assertIn(r"\DIFdelFL{\textbf{[Replaced table body]}}", tex)
+        self.assertNotIn(r"\DIFdelFL{\textbf{[Deleted table]}}", tex)
+        self.assertIn("replaced table* body: visible replacement label inserted", report)
+
+    def test_removes_orphan_deleted_text_inside_whole_added_float(self) -> None:
+        tex, report = run_postprocess(
+            r"""
+\begin{table}[t]
+\caption{\DIFaddFL{pass@1/pass@5/pass@10 (\%) of the reduce-first baseline.}}
+\begin{tabular}{lccc}
+\toprule
+\textbf{\DIFaddFL{Prompt setting}} & \textbf{\DIFaddFL{pass@1}} & \textbf{\DIFaddFL{pass@5}} & \textbf{\DIFaddFL{pass@10}} \\
+\midrule
+\DIFaddFL{Origin Test }& \DIFaddFL{4.1 }& \DIFaddFL{13.1 }& \DIFaddFL{19.0 }\\
+\DIFaddendFL \tool \DIFdelbeginFL \DIFdelFL{; the gap at pass@10 is also significant.}\DIFdelendFL \DIFaddbeginFL \DIFaddFL{Reduced Test }& \textbf{\DIFaddFL{6.3}} & \textbf{\DIFaddFL{17.9}} & \textbf{\DIFaddFL{25.5}} \\
+\bottomrule
+\end{tabular}
+\end{table}
+"""
+        )
+
+        self.assertIn(r"\DIFaddFL{\textbf{[Added table]}}", tex)
+        self.assertIn(r"\DIFaddFL{Reduced Test }&", tex)
+        self.assertNotIn(r"\tool \DIFdelbeginFL", tex)
+        self.assertNotIn("the gap at pass@10 is also significant", tex)
+        self.assertIn("added table:", report)
 
     def test_does_not_mark_minor_cell_deletion(self) -> None:
         tex, report = run_postprocess(
