@@ -134,6 +134,10 @@ struck through everywhere, including table cells and captions. This override is
 applied even if `LATEXDIFF_FLAGS` includes another `--type` value.
 Float begin/end markers are kept as no-ops so color state cannot leak into later
 unchanged sections.
+For marked review PDFs, active `table` and `figure` floats are pinned with
+`[H]` and the `float` package is injected when needed. This keeps large diffed
+tables near their source location instead of letting LaTeX defer them past the
+bibliography.
 
 To avoid that failure mode, the script detects `table`, `table*`, `figure`, and
 `figure*` environments whose captions are fully added and wraps the whole float

@@ -23,6 +23,47 @@ def run_postprocess(source: str) -> tuple[str, str]:
 
 
 class PostprocessMarkedDiffTest(unittest.TestCase):
+    def test_pins_active_float_placement_to_prevent_reference_tail_drift(self) -> None:
+        tex, report = run_postprocess(
+            r"""
+\documentclass{article}
+\begin{document}
+\begin{table}[t]
+\caption{A table}
+\begin{tabular}{ll}
+A & B \\
+\end{tabular}
+\end{table}
+\begin{figure}
+\caption{A figure}
+\end{figure}
+\end{document}
+"""
+        )
+
+        self.assertIn(r"\usepackage{float} % scripted diff float placement", tex)
+        self.assertIn(r"\begin{table}[H]", tex)
+        self.assertIn(r"\begin{figure}[H]", tex)
+        self.assertIn("float placement: pinned 2 active float(s) with [H]", report)
+
+    def test_does_not_pin_commented_deleted_float_sources(self) -> None:
+        tex, report = run_postprocess(
+            r"""
+\documentclass{article}
+\begin{document}
+\DIFdelbeginFL %DIFDELCMD < \begin{table}[t]
+%DIFDELCMD < \caption{Old table}
+%DIFDELCMD < \end{table}
+\DIFdelendFL
+\end{document}
+"""
+        )
+
+        self.assertNotIn(r"\usepackage{float}", tex)
+        self.assertIn(r"%DIFDELCMD < \begin{table}[t]", tex)
+        self.assertIn(r"\DIFdelFL{\textbf{[Deleted table]}}", tex)
+        self.assertNotIn("float placement:", report)
+
     def test_marks_retained_table_body_replacement_without_claiming_whole_table_deleted(self) -> None:
         tex, report = run_postprocess(
             r"""
@@ -83,7 +124,7 @@ Name & \DIFdelbeginFL \DIFdelFL{old}\DIFdelendFL \DIFaddbeginFL \DIFaddFL{new}\D
         )
 
         self.assertNotIn("[Deleted table]", tex)
-        self.assertTrue(report.endswith("None\n"))
+        self.assertIn("float placement: pinned 1 active float(s) with [H]", report)
 
     def test_preserves_whole_deleted_float_marker(self) -> None:
         tex, report = run_postprocess(
