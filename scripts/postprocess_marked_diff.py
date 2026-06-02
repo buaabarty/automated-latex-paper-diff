@@ -38,6 +38,10 @@ def deleted_marker(env: str) -> str:
     return f"\\par\\noindent\\DIFdelFL{{\\textbf{{[Deleted {kind_for_env(env)}]}}}}\\par\\smallskip\n"
 
 
+def replaced_body_marker(env: str) -> str:
+    return f"\\par\\noindent\\DIFdelFL{{\\textbf{{[Replaced {kind_for_env(env)} body]}}}}\\par\\smallskip\n"
+
+
 def normalize_cmidrule_range(value: str) -> str:
     return re.sub(r"\s+", "", value)
 
@@ -121,6 +125,18 @@ def has_commented_deleted_body(block: str, env: str) -> bool:
     return COMMENTED_FIGURE_BODY_RE.search(block) is not None
 
 
+def clean_latexdiff_noise_inside_added_float(block_lines: list[str]) -> list[str]:
+    text = "".join(block_lines)
+    text = re.sub(
+        r"\\DIFaddendFL\s*.*?\\DIFdelbegin(?:FL)?\s*.*?\\DIFdelend(?:FL)?\s*\\DIFaddbeginFL\s*",
+        "",
+        text,
+        flags=re.S,
+    )
+    text = re.sub(r"\\DIFdelbegin(?:FL)?\s*.*?\\DIFdelend(?:FL)?\s*", "", text, flags=re.S)
+    return text.splitlines(keepends=True)
+
+
 def mark_commented_deleted_floats(lines: list[str], marked: list[str]) -> list[str]:
     out: list[str] = []
     i = 0
@@ -181,11 +197,11 @@ def mark_active_float_blocks(lines: list[str], marked: list[str]) -> list[str]:
             block_lines = (
                 block_lines[:1]
                 + ["\\DIFdelbeginFL % scripted retained-float deletion marker\n"]
-                + [deleted_marker(env)]
+                + [replaced_body_marker(env)]
                 + ["\\DIFdelendFL % scripted retained-float deletion marker\n"]
                 + block_lines[1:]
             )
-            marked.append(f"{i + 1}: deleted {env} body: visible deletion label inserted")
+            marked.append(f"{i + 1}: replaced {env} body: visible replacement label inserted")
             block = "".join(block_lines)
 
         caption_is_added = ADDED_CAPTION_RE.search(block) is not None
@@ -196,6 +212,7 @@ def mark_active_float_blocks(lines: list[str], marked: list[str]) -> list[str]:
         )
 
         if caption_is_added and not already_whole_marked:
+            block_lines = clean_latexdiff_noise_inside_added_float(block_lines)
             block_lines = (
                 block_lines[:1]
                 + ["\\DIFaddbeginFL % scripted whole-float addition marker\n"]
