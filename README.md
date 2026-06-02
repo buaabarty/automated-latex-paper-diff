@@ -127,6 +127,9 @@ You can pass `--replace-latex` multiple times. The replacement is applied after
 The script runs `latexdiff` with `--floattype=FLOATSAFE` so complex tables and
 figures are more likely to compile. A side effect of `FLOATSAFE` is that fully
 new tables can be present in the PDF without visually obvious addition markup.
+It also treats the project-local `\find{...}` summary-box macro as a text
+command, so edits inside review summary boxes are marked word-by-word instead
+of replacing or hiding the whole box body.
 
 After `latexdiff` runs, the script overrides all generated `DIFadd`, `DIFdel`,
 `DIFaddFL`, and `DIFdelFL` macros so additions are underlined and deletions are

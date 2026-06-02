@@ -27,6 +27,14 @@ CMIDRULE_WRAPPED_RANGE_RE = re.compile(
 CMIDRULE_DIRECT_RANGE_RE = re.compile(
     rf"\\cmidrule\s*{DIF_MARKUP_COMMAND}\{{\s*{BOOKTABS_RANGE}\s*\}}"
 )
+BOLD_TO_PARAGRAPH_HEADING_RE = re.compile(
+    r"\\DIFdelbegin\s+\\textbf\{\\DIFdel\{([^{}\n]+)\}\}\s*\n"
+    r"(?:%DIFAUXCMD\s*\n)?"
+    r"\\DIFdelend\s+\\DIFaddbegin\s*\n*"
+    r"\\paragraph\{\\textbf\{\\DIFadd\{\1\}\}\}\s*\n"
+    r"\\DIFaddend\s*",
+    re.S,
+)
 
 
 def kind_for_env(env: str) -> str:
@@ -74,6 +82,22 @@ def normalize_booktabs_cmidrules(lines: list[str], marked: list[str]) -> list[st
 
     if normalized:
         marked.append(f"booktabs cmidrule: normalized {normalized} latexdiff-marked rule argument(s)")
+    return text.splitlines(keepends=True)
+
+
+def normalize_rewrapped_paragraph_headings(lines: list[str], marked: list[str]) -> list[str]:
+    text = "".join(lines)
+    normalized = 0
+
+    def replace_heading(match: re.Match[str]) -> str:
+        nonlocal normalized
+        normalized += 1
+        heading = match.group(1)
+        return f"\\paragraph{{\\textbf{{{heading}}}}}\n"
+
+    text = BOLD_TO_PARAGRAPH_HEADING_RE.sub(replace_heading, text)
+    if normalized:
+        marked.append(f"paragraph headings: normalized {normalized} bold-to-paragraph wrapper change(s)")
     return text.splitlines(keepends=True)
 
 
@@ -290,6 +314,7 @@ def postprocess(diff_tex: Path, report_path: Path) -> None:
     marked: list[str] = []
 
     lines = normalize_booktabs_cmidrules(lines, marked)
+    lines = normalize_rewrapped_paragraph_headings(lines, marked)
     lines = pin_active_float_placement(lines, marked)
     lines = mark_commented_deleted_floats(lines, marked)
     lines = mark_active_float_blocks(lines, marked)
