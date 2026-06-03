@@ -211,6 +211,26 @@ Value & 1 & 2 & 3 & 4 & 5 & 6\\
         self.assertNotIn(r"\DIFadd{Internal validity.}", tex)
         self.assertIn("paragraph headings: normalized 1", report)
 
+    def test_normalizes_rewrapped_heading_without_dropping_body_changes(self) -> None:
+        tex, report = run_postprocess(
+            r"""
+\section{Threats to Validity}
+\DIFdelbegin \textbf{\DIFdel{Internal validity.}}
+%DIFAUXCMD
+\DIFdel{LLM outputs are stochastic}\DIFdelend \DIFaddbegin
+
+\paragraph{\textbf{\DIFadd{Internal validity.}}}
+\DIFadd{We mitigate LLM stochasticity through fixed decoding}\DIFaddend .
+"""
+        )
+
+        self.assertIn(r"\paragraph{\textbf{Internal validity.}}", tex)
+        self.assertIn(r"\DIFdel{LLM outputs are stochastic}", tex)
+        self.assertIn(r"\DIFadd{We mitigate LLM stochasticity through fixed decoding}", tex)
+        self.assertNotIn(r"\DIFdel{Internal validity.}", tex)
+        self.assertNotIn(r"\DIFadd{Internal validity.}", tex)
+        self.assertIn("paragraph headings: normalized 1", report)
+
 
 if __name__ == "__main__":
     unittest.main()

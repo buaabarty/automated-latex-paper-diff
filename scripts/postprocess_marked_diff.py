@@ -35,6 +35,14 @@ BOLD_TO_PARAGRAPH_HEADING_RE = re.compile(
     r"\\DIFaddend\s*",
     re.S,
 )
+BOLD_TO_PARAGRAPH_HEADING_WITH_BODY_RE = re.compile(
+    r"\\DIFdelbegin\s+\\textbf\{\\DIFdel\{([^{}\n]+)\}\}\s*\n"
+    r"(?:%DIFAUXCMD\s*\n)?"
+    r"(?P<deleted>.*?\\DIFdel\{.*?\}.*?)"
+    r"\\DIFdelend\s+\\DIFaddbegin\s*\n*"
+    r"\\paragraph\{\\textbf\{\\DIFadd\{\1\}\}\}\s*",
+    re.S,
+)
 
 
 def kind_for_env(env: str) -> str:
@@ -89,12 +97,20 @@ def normalize_rewrapped_paragraph_headings(lines: list[str], marked: list[str]) 
     text = "".join(lines)
     normalized = 0
 
+    def replace_heading_with_body(match: re.Match[str]) -> str:
+        nonlocal normalized
+        normalized += 1
+        heading = match.group(1)
+        deleted = match.group("deleted")
+        return f"\\paragraph{{\\textbf{{{heading}}}}}\n\\DIFdelbegin {deleted}\\DIFdelend \\DIFaddbegin "
+
     def replace_heading(match: re.Match[str]) -> str:
         nonlocal normalized
         normalized += 1
         heading = match.group(1)
         return f"\\paragraph{{\\textbf{{{heading}}}}}\n"
 
+    text = BOLD_TO_PARAGRAPH_HEADING_WITH_BODY_RE.sub(replace_heading_with_body, text)
     text = BOLD_TO_PARAGRAPH_HEADING_RE.sub(replace_heading, text)
     if normalized:
         marked.append(f"paragraph headings: normalized {normalized} bold-to-paragraph wrapper change(s)")
