@@ -4,7 +4,7 @@ IMAGE ?= automated-latex-paper-diff:latest
 
 smoke:
 	bash -n scripts/generate_marked_diff.sh
-	python3 -m py_compile scripts/postprocess_marked_diff.py scripts/normalize_bibitems.py tests/test_postprocess_marked_diff.py tests/test_normalize_bibitems.py
+	python3 -m py_compile scripts/postprocess_marked_diff.py scripts/normalize_bibitems.py tests/test_postprocess_marked_diff.py tests/test_normalize_bibitems.py tests/test_generate_marked_diff_defaults.py
 
 test:
 	python3 -m unittest discover -s tests

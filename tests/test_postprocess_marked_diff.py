@@ -192,6 +192,25 @@ Value & 1 & 2 & 3 & 4 & 5 & 6\\
         self.assertIn(r"\cmidrule{4-5}", tex)
         self.assertIn("booktabs cmidrule: normalized 2", report)
 
+    def test_normalizes_bold_heading_rewrapped_as_paragraph(self) -> None:
+        tex, report = run_postprocess(
+            r"""
+\section{Threats to Validity}
+\DIFdelbegin \textbf{\DIFdel{Internal validity.}}
+%DIFAUXCMD
+\DIFdelend \DIFaddbegin
+
+\paragraph{\textbf{\DIFadd{Internal validity.}}}
+\DIFaddend LLM outputs are stochastic.
+"""
+        )
+
+        self.assertIn(r"\paragraph{\textbf{Internal validity.}}", tex)
+        self.assertIn("LLM outputs are stochastic.", tex)
+        self.assertNotIn(r"\DIFdel{Internal validity.}", tex)
+        self.assertNotIn(r"\DIFadd{Internal validity.}", tex)
+        self.assertIn("paragraph headings: normalized 1", report)
+
 
 if __name__ == "__main__":
     unittest.main()

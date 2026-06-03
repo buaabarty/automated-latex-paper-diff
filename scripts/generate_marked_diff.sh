@@ -276,6 +276,7 @@ latexdiff \
   --floattype=FLOATSAFE \
   --graphics-markup=none \
   --disable-citation-markup \
+  --append-textcmd=find \
   ${LATEXDIFF_FLAGS:-} \
   "${OLD_CLEAN}/${MAIN_TEX}" \
   "${WORK_DIR}/${MAIN_TEX}" \
